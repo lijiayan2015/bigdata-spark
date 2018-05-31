@@ -14,7 +14,7 @@ object SparkWordCount {
     //"local[*]"是指有多少空闲线程就用多少
     val conf = new SparkConf()
       .setAppName("SparkWordCount")
-      //.setMaster("local[2]")
+      .setMaster("local[2]") //本地运行
 
     //创建上下文对象
     val sc: SparkContext = new SparkContext(conf)
