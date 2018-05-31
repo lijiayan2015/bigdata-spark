@@ -1,0 +1,15 @@
+.idea
+BigData-Spark.iml
+*.class
+Day06/target
+.idea/artifacts/
+.idea/compiler.xml
+.idea/hydra.xml
+.idea/libraries/
+.idea/misc.xml
+.idea/scala_compiler.xml
+.idea/uiDesigner.xml
+.idea/workspace.xml
+Day06/src/test/
+Day06/target/
+src/

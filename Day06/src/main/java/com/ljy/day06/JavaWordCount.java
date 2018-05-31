@@ -18,8 +18,8 @@ public class JavaWordCount {
         //创建配置信息类
         /*模板代码*/
         SparkConf conf = new SparkConf()
-                .setAppName("JavaWC");
-                //.setMaster("local[*]");
+                .setAppName("JavaWC")
+                .setMaster("local[*]");
 
         //上传上下文对象
         JavaSparkContext jsc = new JavaSparkContext(conf);
@@ -46,7 +46,7 @@ public class JavaWordCount {
 
         System.out.println(res.collect());
 
-        res.saveAsTextFile("hdfs://h1:9000/spark/wc/out/out_20180531-java");
+        //res.saveAsTextFile("hdfs://h1:9000/spark/wc/out/out_20180531-java");
         jsc.stop();
 
     }
