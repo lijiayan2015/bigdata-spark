@@ -360,3 +360,276 @@
           scala> rdd1.aggregate(0)(math.max(_,_),_+_)
           res52: Int = 12
         ```    
+        **注意,由于每个分区计算完成的顺序有可能不一样,<br/>
+        所以如果是字符串的话,可能会有多种可能的结果**
+        
+        ```scala
+          val rdd3 = sc.parallelize(List("12","23","345","4567"),2)
+          rdd3.aggregate("")((x,y) => math.max(x.length, y.length).toString, (x,y) => x + y)
+          // 分析
+          // 第一个分区 "12","34"
+          // 第一个分区的计算结果  2
+          // 第二个分区 "345","4567"
+          // 第二个分区的计算结果是 4
+          // 如果第一个分区先计算完成,则是"2"+"4" 最后聚合的结果是24
+          // 如果是第二个分区先计算完成,则是 "4"+"2" 最后聚合的结果是42
+    
+        ```
+    - aggregateByKey:<br/>
+        ```scala
+          val rdd1 = sc.parallelize(List( ("mouse", 2),("cat",2), ("cat", 5), ("mouse", 4),("cat", 12), ("dog", 12)), 2)
+          rdd1.aggregateByKey(0)(math.max(_,_),_+_).collect
+          // 分析
+          // 第0个分区 ("mouse", 2),("cat",2), ("cat", 5),
+          // 第1个分区 ("mouse", 4),("cat", 12), ("dog", 12)
+          // bykey会根据key在分区里面又进行分组,所以第一个分区的第一组是("mouse", 2),第二组是("cat",2), ("cat", 5)
+          // 0与第0个分区的第一个分组进行比较,0<2==>第一个组最后结果是("mouse", 2)
+          // 0与第0个分区的第二各分组进行比较,0<2 ==>2 2<5===>5 所以第二组的最后结果是("cat", 5)
+          // 所以第0个分区的最后结果是("mouse", 2),("cat", 5)
+          
+          // 第1个分区分组情况:第一组:("mouse", 4)  第二组: ("cat", 12)  第三组 ("dog", 12)
+          // 0与第1个分区的第一组相比,最后结果是("mouse", 4)
+          // 0与第1个分区的第二组相比,最后结果是("cat", 12)
+          // 0与第1个分区的第三组相比,最后结果是("dog", 12)
+          // 所以第1个分区的最后结果是("mouse", 4),("cat", 12), ("dog", 12)
+          
+          // 最后聚合,相同key的元组的_2相加,所以最后结果聚合的结果是("mouse", 6),("cat", 17), ("dog", 12)
+          scala> rdd1.aggregateByKey(0)(math.max(_,_),_+_).collect
+          res61: Array[(String, Int)] = Array((dog,12), (cat,17), (mouse,6))
+        ----------------------------------------------------------------------------
+          rdd1.aggregateByKey(100)(math.max(_,_),_+_).collect
+          // 分析:
+          // 第0个分区 ("mouse", 2),("cat",2), ("cat", 5),
+          // 第1个分区 ("mouse", 4),("cat", 12), ("dog", 12)
+          // bykey会根据key在分区里面又进行分组,所以第一个分区的第一组是("mouse", 2),第二组是("cat",2), ("cat", 5)
+          // 100与第0个分区的第一个分组进行比较,100>2==>第一个组最后结果是("mouse", 100)
+          // 100与第0个分区的第二各分组进行比较,100>2 ==>100 100>5===>100 所以第二组的最后结果是("cat", 100)
+          // 所以第0个分区的最后结果是("mouse", 100),("cat", 100)
+          
+          // 第1个分区分组情况:第一组:("mouse", 4)  第二组: ("cat", 12)  第三组 ("dog", 12)
+          // 100与第1个分区的第一组相比,最后结果是("mouse", 100)
+          // 100与第1个分区的第二组相比,最后结果是("cat", 100)
+          // 100与第1个分区的第三组相比,最后结果是("dog", 100)
+          // 所以第1个分区的最后结果是("mouse", 100),("cat", 100), ("dog", 100)
+          // 最后聚合,相同key的元组的_2相加,所以最后结果聚合的结果是("mouse", 200),("cat", 200), ("dog", 100)
+          scala> rdd1.aggregateByKey(100)(math.max(_,_),_+_).collect
+          res62: Array[(String, Int)] = Array((dog,100), (cat,200), (mouse,200))
+      
+        ```
+        
+        aggregateByKey实现单词计数:
+        ```scala
+          val rdd1 = sc.parallelize(List( ("mouse", 1),("cat",1), ("cat", 1), ("mouse", 1),("cat", 1), ("dog", 1)), 2)
+          scala> rdd1.aggregateByKey(0)(_+_,_+_).collect
+          res64: Array[(String, Int)] = Array((dog,1), (cat,3), (mouse,2))
+          //原理同上
+        ```
+    
+    - combineByKey:<br/>
+        ```scala
+         def combineByKey[C](createCombiner: (V) => C,  
+                             mergeValue: (C, V) => C,   
+                             mergeCombiners: (C, C) => C): RD
+                  
+         //createCombiner: combineByKey() 会遍历分区中的所有元素，因此每个元素的键要么还没有遇到过，要么就 
+         //和之前的某个元素的键相同。如果这是一个新的元素， combineByKey() 会使用一个叫作 createCombiner() 的函数来创建 
+         //那个键对应的累加器的初始值
+         // 
+         //mergeValue: 如果这是一个在处理当前分区之前已经遇到的键， 它会使用 mergeValue() 方法将该键的累加器对应的当前值与这个新的值进行合并
+         //
+         //mergeCombiners: 由于每个分区都是独立处理的， 因此对于同一个键可以有多个累加器。如果有两个或者更 
+         //多的分区都有对应同一个键的累加器， 就需要使用用户提供的 mergeCombiners() 方法将各 
+         //个分区的结果进行合并。
+  
+  
+          val rdd1 = sc.textFile("hdfs://h1:9000/spark/wc").flatMap(_.split(" ")).map((_,1))
+          rdd1.collect
+          res65: Array[(String, Int)] = Array((hello,1), (java,1), (scala,1), (hello,1), (hello,1), (c++,1), (c#,1), (hello,1), (hello,1), (hello,1), (python,1), (c#,1), (hello,1), (hello,1), (hello,1))
+          
+          rdd1.combineByKey(x=>x,(x:Int,y:Int)=>x+y,(m:Int,n:Int)=> m+n).collect
+          res67: Array[(String, Int)] = Array((scala,1), (python,1), (hello,9), (java,1), (c#,2), (c++,1))
+          
+        //分析:
+        //rdd1.combineByKey(x=>x+10,(x:Int,y:Int)=>x+y,(m:Int,n:Int)=> m+n).collect
+        //    第一个分区的元素
+        //    hello java scala hello
+        //    ---------------------
+        //    第二个分区的元素
+        //    hello c++ c# hello hello
+        //    --------------------
+        //    第三个分区的元素
+        //    hello python c# hello hello hello
+        
+        //计算第一个分区:
+        //hello 是一个新建,createCombiner()创建一个以10为初始值的累加器进行累加---->(hello,10+1)-->(hello,11)
+        //java 是一个新建,createCombiner()创建一个以10为初始值的累加器进行累加---->(java,10+1)-->(java,11)
+        //scala 是一个新建,createCombiner()创建一个以10为初始值的累加器进行累加---->(scala,10+1)-->(scala,11)
+        //hello 不再是一个新值,会在原来的累加器上进行累加 (hello,11+1)-->(hello,12)
+        
+        //计算第二个分区:
+        //hello 是一个新建,createCombiner()创建一个以10为初始值的累加器进行累加---->(hello,10+1)-->(hello,11)
+        //c++ 是一个新建,createCombiner()创建一个以10为初始值的累加器进行累加---->(c++,10+1)-->(c++,11)
+        //c# 是一个新建,createCombiner()创建一个以10为初始值的累加器进行累加---->(c#,10+1)-->(c#,11)
+        //hello 不再是一个新值,会在原来的累加器上进行累加 (hello,11+1)-->(hello,12)
+        //hello 不再是一个新值,会在原来的累加器上进行累加 (hello,12+1)-->(hello,13)
+        
+        //计算第三个分区:
+        //hello 是一个新建,createCombiner()创建一个以10为初始值的累加器进行累加---->(hello,10+1)-->(hello,11)
+        //python 是一个新建,createCombiner()创建一个以10为初始值的累加器进行累加---->(python,10+1)-->(python,11)
+        //c# 是一个新建,createCombiner()创建一个以10为初始值的累加器进行累加---->(c#,10+1)-->(c#,11)
+        //hello 不再是一个新值,会在原来的累加器上进行累加 (hello,11+1)-->(hello,12)
+        //hello 不再是一个新值,会在原来的累加器上进行累加 (hello,12+1)-->(hello,13)
+        //hello 不再是一个新值,会在原来的累加器上进行累加 (hello,13)-->(hello,14)
+        
+        //三个分区进行聚合:
+        // (hello,12+13+14),(java,11),(scala,11),(c++,11),(c#,11+11),(python,11)
+        //===>
+        //(hello,39),(java,11),(scala,11),(c++,11),(c#,22),(python,11)
+        
+        scala> rdd1.combineByKey(x=>x+10,(x:Int,y:Int)=>x+y,(m:Int,n:Int)=> m+n).collect
+        res68: Array[(String, Int)] = Array((scala,11), (python,11), (hello,39), (java,11), (c#,22), (c++,11))
+  
+        ```
+        ```scala
+          
+          val rdd1 = sc.parallelize(List("dog","cat","gnu","salmon","rabbit","turkey","wolf","bear","bee"), 3)
+          val rdd2 = sc.parallelize(List(1,1,2,2,2,1,2,2,2), 3)
+          val rdd3 = rdd2.zip(rdd1)
+          
+          scala> rdd3.collect
+          res69: Array[(Int, String)] = Array((1,dog), (1,cat), (2,gnu), (2,salmon), (2,rabbit), (1,turkey), (2,wolf), (2,bear), (2,bee))
+          
+          val rdd4 = rdd3.combineByKey(List(_), (x: List[String], y: String) => x :+ y, (m: List[String], n: List[String]) => m ++ n)
+          
+          //分析:
+          //    List(_):遍历每一个元素,为不同的key创建各自的list累加器
+          //    (x: List[String], y: String) => x :+ y 把相同key的元素放在同一个累加器中
+          //    (m: List[String], n: List[String]) => m ++ n :将相同key的元素(1,list)的list进行相加
+          
+          scala> rdd4.collect
+          res1: Array[(Int, List[String])] = Array((1,List(dog, cat, turkey)), (2,List(gnu, salmon, rabbit, wolf, bear, bee)))
+    
+        ```
+        
+    - countByKey:<br/>
+        ```scala
+          val rdd1 = sc.parallelize(List(("a", 1), ("b", 2), ("b", 2), ("c", 2), ("c", 1)))
+          scala> rdd1.countByKey
+          res2: scala.collection.Map[String,Long] = Map(a -> 1, b -> 2, c -> 2)
+          
+          //根据key出现的次数进行统计
+          //a 出现了1次,b出现了两次,c出现了两次
+          
+          scala.collection.Map[(String, Int),Long] = Map((b,2) -> 2, (c,2) -> 1, (a,1) -> 1, (c,1) -> 1)
+          //根据value出现的次数进行计数,注意这里不能单独将元组的value作为最后结果的key,需要依赖于元组的key
+          
+        ```
+    
+    - filterByRange():<br/>
+        ```scala
+          val rdd1 = sc.parallelize(List(("e", 5), ("c", 3), ("d", 4), ("c", 2), ("a", 1)))
+          val rdd2 = rdd1.filterByRange("c", "d")
+          
+          scala> rdd2.collect
+          res1: Array[(String, Int)] = Array((c,3), (d,4), (c,2))
+          
+          scala> rdd1.filterByRange("c", "e").collect
+          res2: Array[(String, Int)] = Array((e,5), (c,3), (d,4), (c,2))
+        ```
+    - flatMapValues:<br/>
+        ```scala
+          val rdd3 = sc.parallelize(List(("a", "1 2"), ("b", "3 4")))
+          scala> rdd3.flatMapValues(_.split(" ")).collect
+          res4: Array[(String, String)] = Array((a,1), (a,2), (b,3), (b,4))
+        ```
+    - foldByKey:<br/>
+        ```scala
+          val rdd1 = sc.parallelize(List("dog", "wolf", "cat", "bear"), 2)
+          val rdd2 = rdd1.map(x => (x.length, x))
+          val rdd3 = rdd2.foldByKey("")(_+_)
+          scala> rdd3.collect
+          res6: Array[(Int, String)] = Array((4,wolfbear), (3,dogcat))
+          
+          val rdd = sc.textFile("hdfs://h1:9000/spark/wc").flatMap(_.split(" ")).map((_, 1))
+          rdd.foldByKey(0)(_+_).collect
+          scala> Array[(String, Int)] = Array((scala,1), (python,1), (hello,9), (java,1), (c#,2), (c++,1))
+
+        ```
+    - foreachPartition:<br/>
+        ```scala
+         val rdd1 = sc.parallelize(List(1, 2, 3, 4, 5, 6, 7, 8, 9), 3)
+         scala> rdd1.foreachPartition(x=>println(x.reduce(_+_)))
+         6
+         15
+         24
+        ```
+    - keyBy:<br/>
+        ```scala
+          val rdd1 = sc.parallelize(List("dog", "salmon", "salmon", "rat", "elephant"), 3)
+          scala> rdd1.keyBy(_.length).collect
+          res1: Array[(Int, String)] = Array((3,dog), (6,salmon), (6,salmon), (3,rat), (8,elephant))
+        ```
+    - keys&values:<br/>
+       ```scala
+          val rdd1 = sc.parallelize(List("dog", "tiger", "lion", "cat", "panther", "eagle"), 2)
+          val rdd2 = rdd1.map(x => (x.length, x))
+          scala> rdd2.keys.collect
+          res4: Array[Int] = Array(3, 5, 4, 3, 7, 5)
+          
+          scala> rdd2.values.collect
+          res5: Array[String] = Array(dog, tiger, lion, cat, panther, eagle)
+    
+       ```  
+    - checkpoint:<br/>
+        后续补上
+    
+    - repartition: <br/>
+        ```scala
+          val rdd1 = sc.parallelize(1 to 10,10)
+          scala> rdd1.partitions.length
+          res6: Int = 10
+          
+          val rdd2 = rdd1.repartition(2)
+          scala> rdd2.partitions.length
+          res8: Int = 2
+     
+          val rdd2 = rdd1.repartition(20)
+          scala> rdd2.partitions.length
+          res8: Int = 20
+    
+        ```
+    -  coalesce:<br/>
+        ```scala
+         val rdd1 = sc.parallelize(1 to 10,3)
+         val rdd2 = rdd1.coalesce(2)
+         scala> rdd2.partitions.length
+         res10: Int = 2
+         
+        // 多变少不是发生shuffle,可以成功
+         val rdd2 = rdd1.coalesce(4)
+         scala> rdd2.partitions.length
+         res10: Int = 3  //失败了,没有重新分区成功
+        
+        val rdd2 = rdd1.coalesce(4,true)
+        scala> rdd2.partitions.length
+        res10: Int = 4  //成功了,少变多需要手动指定发生shuffle
+        ```
+    - partitionBy:<br/>
+        ```scala
+          val rdd1 = sc.parallelize(List(("jerry",2),("tom",3),("shuke",4)),3)
+          val rdd2 = rdd1.partitionBy(new org.apache.spark.HashPartitioner(4))
+          scala> rdd2.partitions.length
+          res14: Int = 4
+          
+          val rdd2 = rdd1.partitionBy(new org.apache.spark.HashPartitioner(2))
+          scala> rdd2.partitions.length
+          res14: Int = 2
+        ```
+        
+    - collectAsMap:<br/>
+        ```scala
+          val rdd = sc.parallelize(List(("a", 1), ("b", 2)))
+          scala> rdd.collectAsMap
+          res15: scala.collection.Map[String,Int] = Map(b -> 2, a -> 1)
+        ```
+        

@@ -269,6 +269,101 @@
     ```java
     SparkConf conf = new SparkConf()
                .setAppName("JavaWC");
-               .setMaster("local[*]");
+               //.setMaster("local[*]");
     ```
- 
+  
+#### 遇到的问题以及解决方案:
+    
+  - 问题1:编写好代码后,首次点击Idea运行代码的时候,出现了以下问题:
+    ```java
+        ...
+        Successfully stopped SparkContext
+        Exception in thread "main" java.lang.SecurityException: class "javax.servlet.ServletRegistration"'s signer information does not match signer information of other classes in the same package
+        	at java.lang.ClassLoader.checkCerts(ClassLoader.java:898)
+        	at java.lang.ClassLoader.preDefineClass(ClassLoader.java:668)
+        	at java.lang.ClassLoader.defineClass(ClassLoader.java:761)
+        	at java.security.SecureClassLoader.defineClass(SecureClassLoader.java:142)
+        	at java.net.URLClassLoader.defineClass(URLClassLoader.java:467)
+        	at java.net.URLClassLoader.access$100(URLClassLoader.java:73)
+        	at java.net.URLClassLoader$1.run(URLClassLoader.java:368)
+        	at java.net.URLClassLoader$1.run(URLClassLoader.java:362)
+        	at java.security.AccessController.doPrivileged(Native Method)
+        	at java.net.URLClassLoader.findClass(URLClassLoader.java:361)
+        	at java.lang.ClassLoader.loadClass(ClassLoader.java:424)
+        	at sun.misc.Launcher$AppClassLoader.loadClass(Launcher.java:338)
+        	at java.lang.ClassLoader.loadClass(ClassLoader.java:357)
+        	at org.spark-project.jetty.servlet.ServletContextHandler.<init>(ServletContextHandler.java:136)
+        	at org.spark-project.jetty.servlet.ServletContextHandler.<init>(ServletContextHandler.java:129)
+        	at org.spark-project.jetty.servlet.ServletContextHandler.<init>(ServletContextHandler.java:98)
+        	at org.apache.spark.ui.JettyUtils$.createServletHandler(JettyUtils.scala:126)
+        	at org.apache.spark.ui.JettyUtils$.createServletHandler(JettyUtils.scala:113)
+        	at org.apache.spark.ui.WebUI.attachPage(WebUI.scala:78)
+        	at org.apache.spark.ui.WebUI$$anonfun$attachTab$1.apply(WebUI.scala:62)
+        	at org.apache.spark.ui.WebUI$$anonfun$attachTab$1.apply(WebUI.scala:62)
+        	at scala.collection.mutable.ResizableArray$class.foreach(ResizableArray.scala:59)
+        	at scala.collection.mutable.ArrayBuffer.foreach(ArrayBuffer.scala:47)
+        	at org.apache.spark.ui.WebUI.attachTab(WebUI.scala:62)
+        	at org.apache.spark.ui.SparkUI.initialize(SparkUI.scala:63)
+        	at org.apache.spark.ui.SparkUI.<init>(SparkUI.scala:76)
+        	at org.apache.spark.ui.SparkUI$.create(SparkUI.scala:195)
+        	at org.apache.spark.ui.SparkUI$.createLiveUI(SparkUI.scala:146)
+        	at org.apache.spark.SparkContext.<init>(SparkContext.scala:473)
+        	at com.ljy.day06.SparkWordCount$.main(SparkWordCount.scala:20)
+        	at com.ljy.day06.SparkWordCount.main(SparkWordCount.scala)
+        ...
+
+    ```
+    解决方案:<br/>
+    出现这样问题的原因是:在maven中依赖包顺序的问题,<br/>
+    我之前的依赖顺序是:<br/>
+    hadoop--->org.scala-lang-->org.apache.spark<br/>
+    然后报了以上错误<br/>
+    修改如下后再运行,就不报错了<br/>
+    org.scala-lang-->org.apache.spark--->hadoop(或者直接不依赖hadoop)<br/>
+  
+  - 问题2:在linux的spark上运行的时候报错,错误情况如下:
+    ```java
+        ...
+        Exception in thread "main" java.lang.UnsupportedClassVersionError: com/ljy/day06/JavaWordCount : Unsupported major.minor version 52.0
+                    at java.lang.ClassLoader.defineClass1(Native Method)
+                    at java.lang.ClassLoader.defineClass(ClassLoader.java:800)
+                    at java.security.SecureClassLoader.defineClass(SecureClassLoader.java:142)
+                    at java.net.URLClassLoader.defineClass(URLClassLoader.java:449)
+                    at java.net.URLClassLoader.access$100(URLClassLoader.java:71)
+                    at java.net.URLClassLoader$1.run(URLClassLoader.java:361)
+                    at java.net.URLClassLoader$1.run(URLClassLoader.java:355)
+                    at java.security.AccessController.doPrivileged(Native Method)
+                    at java.net.URLClassLoader.findClass(URLClassLoader.java:354)
+                    at java.lang.ClassLoader.loadClass(ClassLoader.java:425)
+                    at java.lang.ClassLoader.loadClass(ClassLoader.java:358)
+                    at java.lang.Class.forName0(Native Method)
+                    at java.lang.Class.forName(Class.java:274)
+                    at org.apache.spark.util.Utils$.classForName(Utils.scala:175)
+                    at org.apache.spark.deploy.SparkSubmit$.org$apache$spark$deploy$SparkSubmit$$runMain(SparkSubmit.scala:689)
+                    at org.apache.spark.deploy.SparkSubmit$.doRunMain$1(SparkSubmit.scala:181)
+                    at org.apache.spark.deploy.SparkSubmit$.submit(SparkSubmit.scala:206)
+                    at org.apache.spark.deploy.SparkSubmit$.main(SparkSubmit.scala:121)
+                    at org.apache.spark.deploy.SparkSubmit.main(SparkSubmit.scala)
+        ...
+    ```
+    原因:编译的jar包的jdk版本与运行的jdk版本不一致,编译的时候用的是jdk8,linux服务器上的是jdk7<br/>
+    解决方案:linux因为配置了很多的环境变量,改起来比较费劲,在windows上安装jdk7,然后编辑代码打包的时候换成jdk7即可.<br/>
+    
+    
+  
+#### 配置高可用Spark集群
+   - 前提:在已有高可用hadoop集群的基础上搭建
+        ```sbtshell
+         | 主机名 | 安装的软件        | 运行的进程                                         |
+         | ------ | ----------------- | -------------------------------------------------- |
+         | ha1    | hadoop            | NameNode、DFSZKFailoverController(zkfc)、Master         |
+         | ha2    | hadoop            | NameNode、DFSZKFailoverController(zkfc)、Master            |
+         | Ha3    | hadoop            | ResourceManager                                    |
+         | Ha4    | hadoop            | ResourceManager                                    |
+         | Ha5    | hadoop、zookeeper | DataNode、NodeManager、JournalNode、QuorumPeerMain、worker |
+         | Ha6    | hadoop、zookeeper | DataNode、NodeManager、JournalNode、QuorumPeerMain、worker |
+         | Ha7    | hadoop、zookeeper | DataNode、NodeManager、JournalNode、QuorumPeerMain、worker |
+         
+        ```
+   
+   
