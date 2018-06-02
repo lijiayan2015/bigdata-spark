@@ -43,7 +43,7 @@ Exception in thread "main" java.lang.SecurityException: class "javax.servlet.Ser
 
 
 
-
+    在linux的spark上运行的时候报错:
     Exception in thread "main" java.lang.UnsupportedClassVersionError: com/ljy/day06/JavaWordCount : Unsupported major.minor version 52.0
             at java.lang.ClassLoader.defineClass1(Native Method)
             at java.lang.ClassLoader.defineClass(ClassLoader.java:800)
@@ -65,5 +65,6 @@ Exception in thread "main" java.lang.SecurityException: class "javax.servlet.Ser
             at org.apache.spark.deploy.SparkSubmit$.main(SparkSubmit.scala:121)
             at org.apache.spark.deploy.SparkSubmit.main(SparkSubmit.scala)
     END
-
+    原因:编译的jar包的jdk版本与运行的jdk版本不一致,编译的时候用的是jdk8,linux服务器上的是jdk7
+    解决方案:linux因为配置了很多的环境变量,改起来比较费劲,在windows上安装jdk7,然后编辑代码打包的时候换成jdk7即可.
 

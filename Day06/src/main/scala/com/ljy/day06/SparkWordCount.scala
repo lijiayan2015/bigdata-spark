@@ -36,5 +36,6 @@ object SparkWordCount {
     //将数据存到hdfs
     sorted.saveAsTextFile("hdfs://h1:9000/spark/wc/out/out_20180531")
     sc.stop()
+
   }
 }

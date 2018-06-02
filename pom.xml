@@ -15,6 +15,7 @@
     </properties>
     <modules>
         <module>Day06</module>
+        <module>Day07</module>
     </modules>
 
     <build>
