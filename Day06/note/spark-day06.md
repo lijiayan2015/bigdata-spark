@@ -354,16 +354,151 @@
 #### 配置高可用Spark集群
    - 前提:在已有高可用hadoop集群的基础上搭建
         ```sbtshell
-         | 主机名 | 安装的软件        | 运行的进程                                         |
-         | ------ | ----------------- | -------------------------------------------------- |
-         | ha1    | hadoop            | NameNode、DFSZKFailoverController(zkfc)、Master         |
-         | ha2    | hadoop            | NameNode、DFSZKFailoverController(zkfc)、Master            |
-         | Ha3    | hadoop            | ResourceManager                                    |
-         | Ha4    | hadoop            | ResourceManager                                    |
-         | Ha5    | hadoop、zookeeper | DataNode、NodeManager、JournalNode、QuorumPeerMain、worker |
-         | Ha6    | hadoop、zookeeper | DataNode、NodeManager、JournalNode、QuorumPeerMain、worker |
-         | Ha7    | hadoop、zookeeper | DataNode、NodeManager、JournalNode、QuorumPeerMain、worker |
+         | 主机名 | 安装的软件         | 运行的进程                                                |
+         | ------ | ----------------- | ----------------------------------------------------------|
+         | h1    | hadoop            | NameNode、DFSZKFailoverController(zkfc)、Master           |
+         | h2    | hadoop            | NameNode、DFSZKFailoverController(zkfc)、Master           |
+         | H3    | hadoop            | ResourceManager                                           |
+         | H4    | hadoop            | ResourceManager                                           |
+         | H5    | hadoop、zookeeper | DataNode、NodeManager、JournalNode、QuorumPeerMain、worker |
+         | H6    | hadoop、zookeeper | DataNode、NodeManager、JournalNode、QuorumPeerMain、worker |
+         | H7    | hadoop、zookeeper | DataNode、NodeManager、JournalNode、QuorumPeerMain、worker |
          
         ```
+   - 配置h1上的spark/conf/spark-env.sh文件:
+        ```sbtshell
+        export JAVA_HOME=/usr/install/jdk1.7.0_79
+        #export SPARK_MASTER_IP=h1
+        export SPARK_MASTER_PORT=7077
+        export SPARK_DAEMON_JAVA_OPTS="-Dspark.deploy.recoveryMode=ZOOKEEPER -Dspark.deploy.zookeepe
+        r.url=h5:2181,h6:2181,h7:2181 -Dspark.deploy.zookeeper.dir=/spark"
+        export HADOOP_HOME=/home/hadoop1/devlop_env/hadoop-2.7.5
+        export HADOOP_CONF_DIR=/home/hadoop1/devlop_env/hadoop-2.7.5/etc/hadoop
+        
+        ```   
+   - 配置h1上的spark/conf/slaves文件
+        h5
+        h6
+        h7
    
+   - 将配置好的spark包分发到h2,h5,h6,h7上
+        ```sbtshell
+             scp -r spark hadoop1@h2:$PWD
+             scp -r spark hadoop1@h5:$PWD
+             scp -r spark hadoop1@h6:$PWD
+             scp -r spark hadoop1@h7:$PWD
+        ```
+   - 分别在h5,h6,h7上启动zookeeper集群
+        ```sbtshell
+             h5:
+             cd /home/hadoop1/devlop_env/zookeeper-3.4.7
+             ./bin/zkServer.sh start
+             
+             h6:
+             cd /home/hadoop1/devlop_env/zookeeper-3.4.7
+             ./bin/zkServer.sh start
+             
+             h7:
+             cd /home/hadoop1/devlop_env/zookeeper-3.4.7
+             ./bin/zkServer.sh start
+        ```
    
+   - 启动hadoop集群
+        ```sbtshell
+             start-all.sh
+        ```
+   - 启动spark集群:
+        ```sbtshell
+         h1:
+         $SPARK_HOME/bin/start-all.sh
+         h2:
+         $SPARK_HOME/bin/start-master.sh
+        ```
+   - 各节点进程情况:
+        ```sbtshell
+             [hadoop1@h1 sbin]$ jps
+             3903 Master
+             3473 NameNode
+             4012 Jps
+             3784 DFSZKFailoverController
+             [hadoop1@h1 sbin]$ 
+        ```
+        
+        ```sbtshell
+             [hadoop1@h2 sbin]$ jps
+             3235 Jps
+             2852 NameNode
+             3122 Master
+             2963 DFSZKFailoverController
+             [hadoop1@h2 sbin]$ 
+        ```
+        
+        ```sbtshell
+             [hadoop1@h3 ~]$ jps
+             2222 ResourceManager
+             2523 Jps
+             [hadoop1@h3 ~]$ 
+        ```
+        
+        ```sbtshell
+             [hadoop1@h4 ~]$ jps
+             2353 Jps
+             2273 ResourceManager
+             [hadoop1@h4 ~]$ 
+        ```
+        
+        ```sbtshell
+             [hadoop1@h5 current]$ jps
+             3115 Jps
+             2097 QuorumPeerMain
+             3038 Worker
+             2755 JournalNode
+             2653 DataNode
+             2875 NodeManager
+             [hadoop1@h5 current]$ 
+        ```
+        
+        ```sbtshell
+             hadoop1@h6 current]$ jps
+             2083 QuorumPeerMain
+             3032 Worker
+             2879 NodeManager
+             2757 JournalNode
+             2655 DataNode
+             3108 Jps
+             [hadoop1@h6 current]$ 
+        ```
+        
+        ```sbtshell
+             [hadoop1@h7 current]$ jps
+             3034 Jps
+             2712 JournalNode
+             2087 QuorumPeerMain
+             2609 DataNode
+             2982 Worker
+             2829 NodeManager
+             [hadoop1@h7 current]$ 
+        ```
+   
+   - h1 WebUI:<br/>
+    ![h1-WebUI.jpg](./h1-WebUI.jpg)
+   
+   - h2 WebUI:<br/>
+    ![h2-WebUI.jpg](./h2-WebUI.jpg)
+    
+   - 高可用测试:
+        - 1 将h1的master进程kill
+            ```sbtshell
+                 [hadoop1@h1 sbin]$ kill -9 3903
+                 [hadoop1@h1 sbin]$ jps
+                 3473 NameNode
+                 4052 Jps
+                 3784 DFSZKFailoverController
+                 [hadoop1@h1 sbin]$ 
+            ```
+        - 2 刷新h2的WebUI:<br/>
+        ![kill 掉h1后h2的webUI情况](./h2-alive-master.jpg)
+          
+          
+          
+HA Spark 搭建完成 
