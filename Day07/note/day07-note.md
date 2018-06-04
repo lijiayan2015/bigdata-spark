@@ -8,7 +8,7 @@
  - RDD的属性
     - 一组分片(partition),即数据集的基本组成单位.对于RDD来说,每一个分片都会被一个计算任务处理,
       并决定并行计算的粒度.用户可以在创建RDD时指定RDD的分片个数,如果没有指定,那么就会采用默认值.
-      默认值就是程序所分配到的COU的核数.
+      默认值就是程序所分配到的COUR的核数.
     
     - 一个计算每个分区的函数.Spark中RDD的计算是以分片为单位的,每个RDD都会实现compute函数以达到
       这个目的.compute函数会对迭代器进行复合,不需要保存每次计算的结果.
@@ -46,7 +46,7 @@
     - 常用的Transformation:<br/>
     
        - **map(func):**<br/>
-         返回一个新的RDD,该RDD有每一个输入袁术经过fun函数转化后组成
+         返回一个新的RDD,该RDD有每一个输入元素经过fun函数转化后组成
          
        - **filter(func):**<br/>
          返回一个新的RDD，该RDD由经过func函数计算后返回值为true的输入元素组成
@@ -211,7 +211,7 @@
         ![groupByKey和reduceByKey的区别](./groupByKey和reduceByKey的区别.png)
         
         由图可以看到groupByKey是先根据key进行重新分区,然后还需要其他算子参与聚合,
-        而reduceByKey先在本分区内聚合进行局部的聚合,然后在全局聚合,整个过程都有spark自动完成,包括最后的聚合.
+        而reduceByKey先在本分区内聚合进行局部的聚合,然后在全局聚合,整个过程都由spark自动完成,包括最后的聚合.
    
    - 练习5
         ```scala
@@ -251,6 +251,12 @@
         ```scala
          val rdd1 = sc.parallelize(List(("tom", 1), ("jerry", 3), ("kitty", 2),  ("shuke", 1)))
          val rdd2 = sc.parallelize(List(("jerry", 2), ("tom", 3), ("shuke", 2), ("kitty", 5)))
+         
+         //求并集
+        val rdd3 = rdd1.union(rdd2)
+        //按key进行单词计数,并按降序排序
+        rdd3.reduceByKey(_+_).map(x=>(x._2,x._1)).sortByKey(false).map(x=>(x._2,x._1))
+        //注意:调用sortByKey的key-value中,K必须实现Ordered接口
          
         ```  
 

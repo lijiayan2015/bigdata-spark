@@ -17,4 +17,11 @@ Day06/src/main/java/com/
 Day07/src/
 Day07/target/.scala_dependencies
 Day07/target/generated-sources/
-
+Day08/target
+Day08/pom.xml
+Day08/src/main/java/
+Day08/src/main/resources/
+Day08/src/test/
+Day08/target/.scala_dependencies
+Day08/target/generated-sources/
+src/
