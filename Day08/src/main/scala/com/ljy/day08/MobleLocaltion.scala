@@ -1,6 +1,7 @@
 package com.ljy.day08
 
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 
 /**
@@ -53,6 +54,7 @@ object MobleLocaltion {
     // 把经纬度join进来
     val joined: RDD[(String, ((String, Long), (String, String)))] = lpt.join(lacxy)
 
+    joined.persist(StorageLevel.DISK_ONLY)
     val ptxy: RDD[(String, Long, (String, String))] = joined.map(line => {
 
       val phone = line._2._1._1
