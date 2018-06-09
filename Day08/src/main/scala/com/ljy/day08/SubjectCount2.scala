@@ -1,9 +1,7 @@
 package com.ljy.day08
 
-import java.net.URL
-
-import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.{SparkConf, SparkContext}
 
 object SubjectCount2 {
   def main(args: Array[String]): Unit = {
