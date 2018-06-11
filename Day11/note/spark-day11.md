@@ -1,7 +1,7 @@
 ### Kafka
    - 在流计算中,kafka是一般用来缓存数据,Storm通过消费Kafka的数据进行计算
    
-   - kafka三个重要的属性:解耦,异步和并发
+   - kafka三个重要的属性:解耦,异步和并行
    
    - Kafka整体结构图:<br/>
     ![kafka整体结构图](./kafka整体结构图.png)

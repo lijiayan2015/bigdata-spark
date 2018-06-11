@@ -26,7 +26,7 @@ object KafkaProducer {
     props.put("request.required.acks", "1")
 
     //调用分区器
-    props.put("partitioner.class", "kafka.producer.DefaultPartitioner")
+    props.put("partitioner.class", "com.ljy.kafka.CustomPartitioner")
 
     //实例化producer配置类
     val config = new ProducerConfig(props)
