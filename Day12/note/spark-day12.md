@@ -326,6 +326,225 @@
    - 在很多公司,Hadoop到Spark的项目迁移工作一般会进行得很慢,导致很长的一段时间内会同时用hadoop和Spark     
    
  #### Spark-On-Yarn 环境配置
+   - 1.启动hadoop的hdfs和yarn
+   - 2.在已经有的hadoop集群或者其他机器能与hadoop集群通信的机器上,上传spark安装包
+   - 3.进入到spark安装包所在的目录,解压spark安装包
+      ```sbtshell
+        tar -zxvf spark-1.6.3-bin-hadoop2.6.tgz
+      ```
+   - 4.spark安装包解压后名字太长了,重新命名一下
+      ```sbtshell
+         mv spark-1.6.3-bin-hadoop2.6 sparkonyarn
+      ```
+   - 5.进入到sparkonyarn的conf目录,将spark-env.sh.template 复制一份,并将复制的那份重命名为spark-env.sh
+      ```sbtshell
+       $ cd /home/hadoop1/devlop_env/sparkonyarn/conf
+       $ cp spark-env.sh.template spark-env.sh
+      ```
+   - 6.配置spark-env.sh,在文件末尾追加jdk,hadoop配置文件的环境变量
+     ```sbtshell
+        export JAVA_HOME=/usr/install/jdk8
+        export HADOOP_CONF_DIR=/home/hadoop1/devlop_env/hadoop-2.7.5/etc/hadoop
+     ```
+ #### 运行模式(cluster模式和client模式)
+   - cluster模式
+       - demo1
+           - 1.cluster模式运行Spark的examples
+                ```sbtshell
+                   ./bin/spark-submit \
+                   --class org.apache.spark.examples.SparkPi \
+                   --master yarn \
+                   --deploy-mode cluster \
+                   --driver-memory 1g \
+                   --executor-memory 1g \
+                   --executor-cores 2 \
+                   --queue default \
+                   --lib/lib/spark-examples-1.6.3-hadoop2.6.0.jar \
+                   100
+                ```
+           - 2.提交任务到yarn上,可到yarn的WebUI(8088端口)上查看任务的执行进度,输出结果以及其他信息.
+            ![cluster模式](./cluster模式.jpg)
+       
+       - demo2
+            - 1.编辑代码
+                ```scala
+                    package com.ljy.onyarn
+                    
+                    import org.apache.spark.rdd.RDD
+                    import org.apache.spark.{SparkConf, SparkContext}
+                    
+                    object SparkOnYarnClientWC {
+                      def main(args: Array[String]): Unit = {
+                        val conf = new SparkConf().setAppName("SparkOnYarnClientWC")
+                        val sc = new SparkContext(conf)
+                    
+                        val lines: RDD[String] = sc.textFile("hdfs://h1:9000/spark/in/")
+                        val res: RDD[(String, Int)] = lines.flatMap(_.split("\\s")).map((_, 1)).reduceByKey(_ + _)
+                        res.saveAsTextFile("hdfs://h1:9000/spark/out/onyarn/SparkOnYarnClientWC")
+                        sc.stop()
+                        
+                      }
+                    }
+                
+                ```
+            - 2.将代码打包上传到服务器,并在sparkonyarn目录下,运行下面脚本:
+                ```sbtshell
+                  ./bin/spark-submit \
+                  --class com.ljy.onyarn.SparkOnYarnClientWC \
+                  --master yarn \
+                  --deploy-mode cluster \
+                  --driver-memory 1g \
+                  --executor-memory 1g \
+                  --executor-cores 2 \
+                  /home/hadoop1/spark/Day12-1.0.jar
+                  
+                ```
+           - 3.带结果执行完后可到hdfs查看输出结果.
+            
+   - client模式 
+       - demo1:
+           ```sbtshell
+             ./bin/spark-submit \
+             --class org.apache.spark.examples.SparkPi \
+             --master yarn \
+             --deploy-mode client \
+             --driver-memory 1g \
+             --executor-memory 1g \
+             --executor-cores 2 \
+             --queue default \
+             --lib/lib/spark-examples-1.6.3-hadoop2.6.0.jar \
+             100
+           ```
+       - 使用client模式提交到集群,运行失败,结果待查明....
+       
+       - 注意:spark-shell必须使用client模式 `./bin/spark-shell --master yarn --deploy-mode client`
     
-   
+   - 两种模式的区别:
+        - cluster模式：Driver程序在YARN中运行，应用的运行结果不能在客户端显示，
+          所以最好运行那些将结果最终保存在外部存储介质（如HDFS、Redis、Mysql）
+          而非stdout输出的应用程序，客户端的终端显示的仅是作为YARN的job的简单运行状况。
+          
+        - client模式：Driver运行在Client上，应用程序运行结果会在客户端显示，所有适合运
+          行结果有输出的应用程序（如spark-shell）
+    
+ #### 原理分析
+   - cluster模式：<br/>
+    ![Cluster模式](./spark-on-yarn1.png)
+    <br/>
+    Spark Driver首先作为一个ApplicationMaster在YARN集群中启动，客户端提交给ResourceManager的
+    每一个job都会在集群的NodeManager节点上分配一个唯一的ApplicationMaster，由该ApplicationMaster
+    管理全生命周期的应用。具体过程：
+       - 1.由client向ResourceManager提交请求，并上传jar到HDFS上,这期间包括四个步骤：
+            - 连接到RM
+            - 从RM的ASM（ApplicationsManager ）中获得metric、queue和resource等信息。
+            - upload app jar and spark-assembly jar
+            - 设置运行环境和container上下文（launch-container.sh等脚本)
+       - 2.ResouceManager向NodeManager申请资源，创建Spark ApplicationMaster（每个SparkContext都有一个ApplicationMaster）
+       - 3.NodeManager启动ApplicationMaster，并向ResourceManager AsM注册
+       - 4.ApplicationMaster从HDFS中找到jar文件，启动SparkContext、DAGscheduler和YARN Cluster Scheduler
+       - 5.ResourceManager向ResourceManager AsM注册申请container资源
+       - 6.ResourceManager通知NodeManager分配Container，这时可以收到来自ASM关于container的报告。（每个container对应一个executor）
+       - 7.Spark ApplicationMaster直接和container（executor）进行交互，完成这个分布式任务。
+       
+  - client模式:<br/>
+    ![Client模式](./Client模式.png)
+    <br/>
+    在client模式下，Driver运行在Client上，通过ApplicationMaster向RM获取资源。本地Driver负责与所有的executor container进行交互，
+    并将最后的结果汇总。结束掉终端，相当于kill掉这个spark应用。一般来说，如果运行的结果仅仅返回到terminal上时需要配置这个。
+    <br/>
+    客户端的Driver将应用提交给Yarn后，Yarn会先后启动ApplicationMaster和executor，另外ApplicationMaster和executor都 是装载在
+    container里运行，container默认的内存是1G，ApplicationMaster分配的内存是driver- memory，executor分配的内存是executor-memory。
+    同时，因为Driver在客户端，所以程序的运行结果可以在客户端显 示，Driver以进程名为SparkSubmit的形式存在。
+     
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
         
