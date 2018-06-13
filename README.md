@@ -42,3 +42,16 @@
             4. SparkSQL
             5. 编程方式执行Spark SQL查询
             6. Hive(待完成)
+            
+   - [Day11](./Day11)
+        - [笔记](./Day11/note/spark-day11.md)
+        - 主要内容:
+            1. kafka的原理
+            2. kafka集群配置
+            3. [kafka的命令](./Day11/note/kafka命令.md)
+            4. [kafka-manager](./Day11/note/kafka-manager/Kafka-Manager.md)
+            
+   - [Day12](./Day12)
+        - [笔记](./Day12/note/spark-day12.md)
+        - 主要内容:
+            1. spark源码解析(待完成)
