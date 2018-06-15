@@ -21,6 +21,10 @@
         <module>Day10</module>
         <module>Day11</module>
         <module>Day12</module>
+        <module>Day13</module>
+        <module>Day14-Redis</module>
+        <module>Day15-ElasticSearch</module>
+
     </modules>
 
     <build>

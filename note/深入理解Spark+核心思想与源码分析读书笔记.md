@@ -72,9 +72,21 @@
                 部署模式以外,Spark还提供了Local模式和local-cluster模式关于开发和调试.
                 
    
+### Spark模型设计
+   1. Spark编程模型<br/>
+       Spark应用程序从编写到提交,执行,输出的整个过程如图所示:<br/>
+       ![代码执行过程](./代码执行过程.jpg)
+       <br/>
+       图中描述的步骤如下:
+        1. 用户使用SparkContext提供的API编写Driver Application程序.此外SQLContext,HiveContext,StreamingContext对SparkContext
+           进行封装,并提供了SQL,Hive及流式计算相关的API.
+           
+        2. 使用SparkContext提交的用户应用程序,首先会使用BlockManager和BroadcastManager将任务的Hadoop配置进行广播.
+           然后由DAGScheduler将任务转换为RDD并组织成DAG,DAG还将被划分为不同的Stage.
+           最后由TaskScheduler借助ActorSystem将任务提交给集群管理器(Cluster Manager) 
    
-   
-   
+        3. 集群管理器(Cluster Manager)给任务分配资源,即将具体的任务分配到Worker上,Worker创建Executor来处理任务的运行.
+           Standalone,YARN,Mesos,EC2等都可以作为Spark的集群管理.
    
    
    
