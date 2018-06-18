@@ -374,3 +374,486 @@
             ```
             注意观察节点位置的变化:
             ![节点位置的变化](./节点位置的变化.jpg)
+            
+### 数据类型测试
+
+#### String:
+   1. set  get
+        ```sbtshell
+          192.168.93.112:7001> set lv1 biyan
+          -> Redirected to slot [10887] located at 192.168.93.112:7002
+          OK
+          192.168.93.112:7002> get lv1
+          "biyan"
+          192.168.93.112:7002> 
+
+        ```
+   2. 自增incr -- 值必须是整数值类型 
+        ```sbtshell
+           192.168.93.112:7003> set s1 0
+           OK
+           192.168.93.112:7003> incr s1
+           (integer) 1
+           192.168.93.112:7003> incr s1
+           (integer) 2
+           192.168.93.112:7003> incr s1
+           (integer) 3
+           192.168.93.112:7003> get s1
+           "3"
+           192.168.93.112:7003> 
+        ```
+   3. 自减decr -- 值必须是整数值类型
+        ```sbtshell
+            192.168.93.112:7003> set k2 100
+            -> Redirected to slot [449] located at 192.168.93.112:7001
+            OK
+            192.168.93.112:7001> decr k2
+            (integer) 99
+            192.168.93.112:7001> decr k2
+            (integer) 98
+            192.168.93.112:7001> decr k2
+            (integer) 97
+            192.168.93.112:7001> get k2
+            "97"
+            192.168.93.112:7001>  
+        ```
+   4. 自增incrby自减decrby指定数值 -- -- 值必须是整数值类型
+        ```sbtshell
+          192.168.93.112:7001> set lv 100
+          OK
+          192.168.93.112:7001> incrby lv 200
+          (integer) 300
+          192.168.93.112:7001> decrby lv 120
+          (integer) 180
+          192.168.93.112:7001> 
+        ```
+   5. 同时存取多个值mset mget
+       ```sbtshell
+          #单节点上
+          mset k1 v1 k2 v2
+          
+          mget k1 k2
+       ```
+       在集群上存储时,返回(error) CROSSSLOT Keys in request don't hash to the same slot,
+       ```sbtshell
+         192.168.93.112:7002> set 1 hello
+         OK
+         192.168.93.112:7002> set 2 world
+         OK
+         192.168.93.112:7002> mget 1 2
+         (error) CROSSSLOT Keys in request don't hash to the same slot
+         192.168.93.112:7002> set {aaa}1 hello
+         OK
+         192.168.93.112:7002> set {aaa}2 world
+         OK
+         192.168.93.112:7002> mget {aaa}1 {aaa}2
+         1) "hello"
+         2) "world"
+         192.168.93.112:7002> 
+         
+       ```
+       
+       [查看原因](./redis3.0cluster功能介绍-邱明成-博客园.pdf)
+ 
+   6. 使用string的问题:<br/>
+   假设有User对象以JSON序列化的形式存储到Redis中，User对象有id，username、password、age、name等属性，存储的过程如下： 
+   保存、更新： <br/>
+   User对象  json(string)  redis 
+   如果在业务上只是更新age属性，其他的属性并不做更新我应该怎么做呢？ 如果仍然采用上边的方法在传输、处理时会造成资源浪费，下边讲的hash可以很好的解决这个问题。
+   
+#### redis hash       
+   1. 存hset m1 k1 v1   取 hget m1 k1   删除一个值 hdel m1 k1
+        ```sbtshell
+          192.168.93.112:7002> hset m1 k1 v1
+          (integer) 0
+          192.168.93.112:7002> HSET m1 k2 v2
+          (integer) 1
+          192.168.93.112:7002> hget m1
+          (error) ERR wrong number of arguments for 'hget' command
+          192.168.93.112:7002> hget m1 k1
+          "v1"
+          192.168.93.112:7002> hdel m1
+          (error) ERR wrong number of arguments for 'hdel' command
+          192.168.93.112:7002> hdel m1 k1
+          (integer) 1
+          192.168.93.112:7002> 
+        ```
+   2. 同时添加多个值hmset m1 k1 v1 k2 v2 ...<br/>
+      同时查看多个值hmget m1 k1 k2 k3 ...
+        ```sbtshell
+          192.168.93.112:7002> hmset m1 k1 v1 k2 v2 k3 v3
+          OK
+          192.168.93.112:7002> hmget m1 k1 k2 k3
+          1) "v1"
+          2) "v2"
+          3) "v3"
+          192.168.93.112:7002>
+        ```
+   4. 增加数值
+        ```sbtshell
+          192.168.93.112:7002> hset m1 k1 2
+          (integer) 0
+          192.168.93.112:7002> hincrby m1 k1 100
+          (integer) 102
+          192.168.93.112:7002> 
+        ```
+   5. 查看是否m1中是否存在k1字段
+        ```sbtshell
+          192.168.93.112:7002> hexists m1 k1
+          (integer) 1
+          192.168.93.112:7002> hexists m1 k100
+          (integer) 0
+          192.168.93.112:7002> 
+        ```
+   6. 如果字段不存在,执行hset,如果存在,不做任何操作 hsetnx key field value
+        ```sbtshell
+           192.168.93.112:7002> hexists m1 k1
+           (integer) 1
+           192.168.93.112:7002> hexists m1 k100
+           (integer) 0
+           192.168.93.112:7002> hsetnx m1 k1 100
+           (integer) 0
+           192.168.93.112:7002> hsetnx m1 k2 100
+           (integer) 0
+           192.168.93.112:7002> hsetnx m1 k200 100
+           (integer) 1
+           192.168.93.112:7002> 
+        ```
+   7. 只获取key或者值
+        ```sbtshell
+            192.168.93.112:7002> hkeys m1
+            1) "k2"
+            2) "k1"
+            3) "k3"
+            4) "k200"
+            192.168.93.112:7002> hvalues m1
+            (error) ERR unknown command 'hvalues'
+            192.168.93.112:7002> hvals m1
+            1) "v2"
+            2) "102"
+            3) "v3"
+            4) "100"
+            192.168.93.112:7002> 
+        ```
+   8. 获取字段的数量:hlen m1
+       ```sbtshell
+            192.168.93.112:7002> hlen m1
+            (integer) 4
+            192.168.93.112:7002> 
+       ```
+   
+#### List 类型
+   1. 从左边存值(堆栈:先进后出(从左边来看))lpush
+      ```sbtshell
+         192.168.93.112:7001> lpush list5 1 2 3 4 5 6
+         -> Redirected to slot [7009] located at 192.168.93.112:7002
+         (integer) 6
+         192.168.93.112:7002> lrange list5 0 -1
+         1) "6"
+         2) "5"
+         3) "4"
+         4) "3"
+         5) "2"
+         6) "1"
+      ```
+      
+   2. 从右边存值(队列:先进先出(从左边来看是先进先出))rpush
+      ```sbtshell
+          192.168.93.112:7002> rpush list5 a b c d
+          (integer) 10
+          192.168.93.112:7002> lrange list 0 -1
+          -> Redirected to slot [12291] located at 192.168.93.112:7003
+           1) "6"
+           2) "5"
+           3) "4"
+           4) "3"
+           5) "2"
+           6) "1"
+           7) "6"
+           8) "5"
+           9) "4"
+          10) "3"
+          11) "2"
+          12) "1"
+          13) "a"
+          14) "b"
+          15) "c"
+          16) "d"
+          192.168.93.112:7003>
+      ```
+   3. 查看list:lrange list1 0 -1    <br/> 
+      第一个参数表示从第几个元素开始查看,第二个参数表示查看几个元素,如果是-1表示查看之后的所有元素
+      
+   4. 从左(lpop)右(rpop)两端弹出:
+      ```sbtshell
+        192.168.93.112:7002> lpush list2 1 2 3 4 5 6
+        -> Redirected to slot [11142] located at 192.168.93.112:7003
+        (integer) 6
+        192.168.93.112:7003> lrange list2 0 -1
+        1) "6"
+        2) "5"
+        3) "4"
+        4) "3"
+        5) "2"
+        6) "1"
+        192.168.93.112:7003> rpop list2
+        "1"
+        192.168.93.112:7003> lrange list2 0 -1
+        1) "6"
+        2) "5"
+        3) "4"
+        4) "3"
+        5) "2"
+        192.168.93.112:7003> rpop list2
+        "2"
+        192.168.93.112:7003> lpop list2
+        "6"
+        192.168.93.112:7003> lpop list2
+        "5"
+        192.168.93.112:7003> lrange list2
+        (error) ERR wrong number of arguments for 'lrange' command
+        192.168.93.112:7003> lrange list2 0 -1
+        1) "4"
+        2) "3"
+        192.168.93.112:7003> 
+
+      ``` 
+   5. 获取list长度 llen list2
+        ```sbtshell
+           192.168.93.112:7003> llen list2
+           (integer) 2
+           192.168.93.112:7003> llen list1
+           -> Redirected to slot [7141] located at 192.168.93.112:7002
+           (integer) 6
+           192.168.93.112:7002> 
+        ```
+   6. 删除列表中指定的元素<br/>
+        - lrem key count value<br/>
+        lrem 命令会删除列表中前count个值值为value的元素,返回实际删除元素的个数.<br/>
+        根据count值得不同,该命令的执行方式会有不同.
+            - 当count值>0时,lrem会从列表的左边开始删除
+               ```sbtshell
+                  192.168.93.112:7001> lrem ls 1 hello
+                  (integer) 1
+                  192.168.93.112:7001> lrange ls 0 -1
+                  1) "is"
+                  2) "this"
+                  3) "hao"
+                  4) "ni"
+                  5) "world"
+                  6) "hello"
+                  192.168.93.112:7001> 
+               ```
+            - 当count值<0时,lrem会从列表的右边开始删除
+                ```sbtshell
+                   192.168.93.112:7001> lrange ls 0 -1
+                   1) "good"
+                   2) "is"
+                   3) "this"
+                   4) "hao"
+                   5) "ni"
+                   6) "world"
+                   7) "hello"
+                   8) "hello"
+                   192.168.93.112:7001> lrem ls -1 1
+                   (integer) 0
+                   192.168.93.112:7001> lrem ls -1 good
+                   (integer) 1
+                   192.168.93.112:7001> lrange ls 0 -1
+                   1) "is"
+                   2) "this"
+                   3) "hao"
+                   4) "ni"
+                   5) "world"
+                   6) "hello"
+                   7) "hello"
+                   192.168.93.112:7001> 
+                              
+                ```
+            - 当count值=0时,lrem会从删除列表中所有的value值
+                ```sbtshell
+                  192.168.93.112:7001> lrem ls 0 hao
+                  (integer) 1
+                  192.168.93.112:7001> lrange ls 0 -1
+                  1) "is"
+                  2) "this"
+                  3) "ni"
+                  4) "world"
+                  5) "hello"
+                ```
+#### set类型,数据有序且不重复
+   1. 添加(sadd)元素并查看(smembers)元素
+        ```sbtshell
+           192.168.93.112:7001> sadd set2 1 2 3 3 4 5 5
+           -> Redirected to slot [15294] located at 192.168.93.112:7003
+           (integer) 5
+           192.168.93.112:7003> smembers set2
+           1) "1"
+           2) "2"
+           3) "3"
+           4) "4"
+           5) "5"
+           192.168.93.112:7003> 
+        ```  
+   2. 删除元素srem k1 value (移除值为value的元素)
+        ```sbtshell
+          192.168.93.112:7003> srem set2 3   #移除值为3的元素
+          (integer) 1   #移除一个
+          192.168.93.112:7003> smembers set2
+          1) "1"
+          2) "2"
+          3) "4"
+          4) "5"
+          192.168.93.112:7003> srem set2 3  #再次移除3这个元素
+          (integer) 0 #已经没有3这个元素了,移除结果为0
+          192.168.93.112:7003> 
+        ```
+   3. 判断元素是否存在
+        ```sbtshell
+          192.168.93.112:7003> sismember set2 3
+          (integer) 0
+          192.168.93.112:7003> sismember set2 1
+          (integer) 1
+          192.168.93.112:7003> 
+        ```  
+   
+##### 运算命令:
+   1. 运算差集
+        ```sbtshell
+          127.0.0.1:6379> sadd set3 2 3 4
+          (integer) 3
+          127.0.0.1:6379> sadd set4 1 2 3
+          (integer) 3
+          127.0.0.1:6379> sdiff set4 set3
+          1) "1"
+          127.0.0.1:6379> sdiff set3 set4
+          1) "4"
+        ```
+   2. 交集运算:
+        ```sbtshell
+          127.0.0.1:6379> sinter set3 set4
+          1) "2"
+          2) "3"
+        ```
+   3. 并集运算:
+        ```sbtshell
+          127.0.0.1:6379> sunion set3 set4
+          1) "1"
+          2) "2"
+          3) "3"
+          4) "4"
+        ```
+   4. 注意,以上命令在集群中,如果两个set不在同一个节点,运行时报错:
+        ```sbtshell
+          192.168.93.112:7002> sinter set3 set4
+          (error) CROSSSLOT Keys in request don't hash to the same slot
+          192.168.93.112:7002>
+        ```
+
+#### Sortedset类型
+   - 在设置时,回个一个分数,通过分数,可以进行排序
+   1. 添加元素,并查看排名
+        ```sbtshell
+          192.168.93.112:7002> zadd zset1 1 hahaha 2 hehehe 0 ooooo
+          -> Redirected to slot [4341] located at 192.168.93.112:7001
+          (integer) 3
+          192.168.93.112:7001> zrange zset1 0 -1
+          1) "ooooo"
+          2) "hahaha"
+          3) "hehehe"
+          192.168.93.112:7001> 
+        ```
+   2. 删除元素:
+        ```sbtshell
+          192.168.93.112:7001> zrange zset1 0 -1
+          1) "ooooo"
+          2) "hahaha"
+          3) "hehehe"
+          192.168.93.112:7001> zrem zset1 ooooo
+          (integer) 1
+          192.168.93.112:7001> zrange zset1 0 -1
+          1) "hahaha"
+          2) "hehehe"
+          192.168.93.112:7001> 
+
+        ```
+   3. 查看某范围内的排名:
+        ```sbtshell
+          192.168.93.112:7002> zrange zset 0 -1
+          1) "heihei"
+          2) "hello"
+          3) "world"
+          4) "nihao"
+          5) "wotoo"
+          192.168.93.112:7002> zrange zset 0 3
+          1) "heihei"
+          2) "hello"
+          3) "world"
+          4) "nihao"
+          192.168.93.112:7002> 
+        ```  
+   4. 查看某分数范围内的元素
+        ```sbtshell
+          192.168.93.112:7002> zrangebyscore zset 3 4
+          1) "nihao"
+          2) "wotoo"
+          192.168.93.112:7002>
+        ``` 
+   5. 增加某个元素的分数,返回的是更改后的分数
+        ```sbtshell
+          192.168.93.112:7002> zincrby zset 10 nihao
+          "13"
+          192.168.93.112:7002> 
+        ```
+   6. 获取元素的个数
+        ```sbtshell
+          192.168.93.112:7002> zcard zset 
+          (integer) 5
+          192.168.93.112:7002> 
+        ```
+   7. 获取指定分数范围内的元素
+        ```sbtshell
+              192.168.93.112:7002> zcount zset 2 3
+              (integer) 0
+              192.168.93.112:7002> zcount zset 2 4
+              (integer) 1
+              192.168.93.112:7002> 
+        ```
+   8. 按照排名范围删除元素
+        ```sbtshell
+          192.168.93.112:7002> zremrangebyrank zset 0 2
+          (integer) 3
+          192.168.93.112:7002> zmembers zset
+          (error) ERR unknown command 'zmembers'
+          192.168.93.112:7002> zcard zset
+          (integer) 2
+          192.168.93.112:7002> 
+        ```  
+  
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+            
+        
+   
