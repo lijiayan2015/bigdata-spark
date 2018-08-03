@@ -1,7 +1,7 @@
 ### Spark启动流程
     
    - 1 调用start-adll.sh启动Master服务(进程)
-   - 2 start-adll.sh会找到Slave配置文件,遍历出需要在那些节点上启动Worker,开始启动Worker
+   - 2 start-all.sh会找到Slave配置文件,遍历出需要在那些节点上启动Worker,开始启动Worker
    - 3 Worker进程启动后,调用生命周期方法开始向Master进行注册
    - 4 Master接收到注册信息后,把Worker的info保存到内存和磁盘(调用持久化引擎),<br/>
         Master向Worker响应注册成功的信息(把Master的URL发送给对应的Worker)
