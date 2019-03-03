@@ -98,8 +98,7 @@
         ```scala
          //到每个节点下:
          cd $KAFKA_HOME
-         nohup ./bin/kafka-manager -Dconfig.file=conf/application.conf -Dhttp.port=9999 &
-  
+         nohup kafka-server-start.sh $KAFKA_HOME/config/server.properties 1>/dev/null 2>&1 &
         ```      
      - 4.启动完成后,jsp即可看到有kafka的进程
    
